@@ -1,0 +1,20 @@
+{
+  "Users": [
+    {
+      "Name": "StandardUser",
+      "Username": "standard_user",
+      "Password": "secret_sauce",
+      "IsValid": true
+    }
+  ],
+  "Products": [
+    {
+      "Name": "Sauce Labs Backpack",
+      "Price": "$29.99"
+    },
+    {
+      "Name": "Sauce Labs Bike Light",
+      "Price": "$9.99"
+    }
+  ]
+}
