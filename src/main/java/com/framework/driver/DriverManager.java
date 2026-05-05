@@ -122,10 +122,6 @@ private static BrowserType getBrowserType(Playwright playwright, String browserT
         return CONFIG.get().getProperty(key);
     }
 
-    public static String getBrowserName() {
-        return BROWSER_NAME.get();
-    }
-
     public static void quit() {
         if (PAGE.get() != null) {
             PAGE.get().close();
