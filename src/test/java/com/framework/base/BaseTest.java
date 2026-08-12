@@ -1,33 +1,38 @@
 package com.framework.base;
 
+import com.aventstack.extentreports.ExtentTest;
+import com.framework.config.Author;
+import com.framework.config.TestID;
 import com.framework.driver.DriverManager;
 import com.framework.pages.BasePage;
-import com.framework.utils.ConfigLoader;
 import com.framework.utils.ExtentReportManager;
-import org.testng.ITestContext;
+import com.framework.utils.GeneralUtil;
+import com.framework.utils.PathConfig;
 import org.testng.ITestResult;
-import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 
 import java.lang.reflect.Method;
 
+/**
+ * Base test class providing browser lifecycle management, ExtentReport integration,
+ * and utility accessors for all test classes.
+ */
 public abstract class BaseTest {
-    protected static boolean initialized = false;
-    protected static boolean reportInitialized = false;
-    protected String category = "Regression";
+    protected final PathConfig pathConfig = new PathConfig();
 
-    @BeforeClass
-    public void beforeClass(ITestContext context) {
-        if (!initialized) {
-            ConfigLoader.loadDefault();
-            initialized = true;
-        }
-        if (!reportInitialized) {
-            ExtentReportManager.initReport();
-            reportInitialized = true;
-        }
+    /**
+     * Returns the ExtentTest instance for the current thread.
+     */
+    protected ExtentTest getExtentTest() {
+        return ExtentReportManager.getTest();
+    }
+
+    /**
+     * Returns the PathConfig for report/screenshot paths.
+     */
+    protected PathConfig getPathConfig() {
+        return pathConfig;
     }
 
     @BeforeMethod
@@ -37,21 +42,24 @@ public abstract class BaseTest {
             DriverManager.setBrowser(browserName);
         }
         DriverManager.initDriver();
-        
-        org.testng.annotations.Test testAnnotation = method.getAnnotation(org.testng.annotations.Test.class);
-        String description = testAnnotation != null ? testAnnotation.description() : method.getName();
-        String testCategory = getCategory(method);
-        String author = getAuthor(method);
+
+        // Thread-safe lazy init for ExtentReports
+        ExtentReportManager.ensureInitialized();
+
+        String testName = method.getName();
+        String description = getTestDescription(method);
+        String category = getTestCategory(method);
+        String author = getTestAuthor(method);
         String browser = DriverManager.getBrowserName();
-        
-        ExtentReportManager.startTest(method.getName(), description, testCategory, author, browser);
-        ExtentReportManager.info("Test started: " + method.getName());
+
+        ExtentReportManager.startTest(testName, description, category, author, browser);
+        ExtentReportManager.info("Test started: " + testName);
     }
 
     @AfterMethod
     public void tearDown(ITestResult result) {
         byte[] screenshot = null;
-        
+
         if (result.getStatus() == ITestResult.FAILURE) {
             screenshot = DriverManager.takeScreenshot();
             ExtentReportManager.fail(result.getThrowable(), screenshot);
@@ -60,14 +68,9 @@ public abstract class BaseTest {
         } else if (result.getStatus() == ITestResult.SKIP) {
             ExtentReportManager.skip("Test Skipped");
         }
-        
-        ExtentReportManager.flush();
-        DriverManager.quit();
-    }
 
-    @AfterClass
-    public void afterClass() {
-        ExtentReportManager.flush();
+        ExtentReportManager.removeThread();
+        DriverManager.quit();
     }
 
     protected <T extends BasePage> T getPageObject(Class<T> pageClass) {
@@ -78,30 +81,49 @@ public abstract class BaseTest {
         }
     }
 
-    protected String getCategory(Method method) {
-        org.testng.annotations.Test annotation = method.getAnnotation(org.testng.annotations.Test.class);
-        if (annotation != null && annotation.groups().length > 0) {
-            for (String group : annotation.groups()) {
-                if (group.equals("Login") || group.equals("E2E") || group.equals("smoke") || 
-                    group.equals("negative")) {
+    /**
+     * Extract description from @Test annotation or method Javadoc.
+     */
+    private String getTestDescription(Method method) {
+        org.testng.annotations.Test testAnnotation = method.getAnnotation(org.testng.annotations.Test.class);
+        if (testAnnotation != null && testAnnotation.description() != null
+                && !testAnnotation.description().isEmpty()) {
+            return testAnnotation.description();
+        }
+        return "No description";
+    }
+
+    /**
+     * Extract test category from TestNG groups.
+     */
+    private String getTestCategory(Method method) {
+        org.testng.annotations.Test testAnnotation = method.getAnnotation(org.testng.annotations.Test.class);
+        if (testAnnotation != null && testAnnotation.groups().length > 0) {
+            for (String group : testAnnotation.groups()) {
+                if ("Login".equals(group) || "E2E".equals(group) || "smoke".equals(group)
+                        || "negative".equals(group) || "failure".equals(group)) {
                     return group;
                 }
             }
-            return annotation.groups()[0];
+            return testAnnotation.groups()[0];
         }
         return "Regression";
     }
 
-    private static final String[] AUTHORS = {"Vignesh", "Vicky", "KMDV"};
-    
-    protected String getAuthor(Method method) {
-        org.testng.annotations.Test annotation = method.getAnnotation(org.testng.annotations.Test.class);
-        if (annotation != null && annotation.groups().length > 0) {
-            for (String group : annotation.groups()) {
-                for (String author : AUTHORS) {
-                    if (author.equals(group)) {
-                        return author;
-                    }
+    /**
+     * Extract author from @Author annotation or TestNG groups.
+     */
+    private String getTestAuthor(Method method) {
+        Author authorAnnotation = method.getAnnotation(Author.class);
+        if (authorAnnotation != null && !authorAnnotation.Name().isEmpty()) {
+            return authorAnnotation.Name();
+        }
+
+        org.testng.annotations.Test testAnnotation = method.getAnnotation(org.testng.annotations.Test.class);
+        if (testAnnotation != null) {
+            for (String group : testAnnotation.groups()) {
+                if ("Vignesh".equals(group) || "Vicky".equals(group) || "KMDV".equals(group)) {
+                    return group;
                 }
             }
         }
